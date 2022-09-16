@@ -21,10 +21,10 @@ The main functions are:
 Example. Consider the case of simple ball equation with two dependent variables: z_1,z_2,
          and one parameter: \theta: z':=(z_2,-\theta). We have: 
  
-time_horizon=0.4
-x,y=var('x y')
+time_horizon=0.4 # time horizon
+x,y=var('x y') # dependent variables
 var('th1 th2 gamma')
-FN= [y,-th1]
+FN= [y,-th1] # model
 fFN=lambdify([x,y,th1], FN)
 gamma=0.05 # dimension of S*
 param=0 # index of the parameter we want to estimate.
@@ -37,7 +37,7 @@ slDescrFN=[('uniform', (7,12)), ('trunc_gauss',(0,.1,-1,1)), ('trunc_gauss',(0,.
 slFN=buildSampler(slDescrFN) # build samplers one for each parameter
 P=list(np.arange(7,12,0.7)) # nodes points for the approximate CDF
 rX0FN=refine(X0FN,P,param) #refinement step
-Xin,Xout,vol = boxBackReachAlt(fAdvI,rX0FN,SFN,sl=slFN,delta=.1,intvf=True) # convering computation
+Xin,Xout,vol = boxBackReachAlt(fAdvI,rX0FN,SFN,sl=slFN,delta=.1,intvf=True) # covering computation
 ns=ceiling(Nsample(sum([e[1] for e in Xout]),.001,.001/(len(P)+1))) # number of samples for epsilon=0.001 and delta=0.001
 mu,hi,Pn,volN,_=estimateCDF(fAdv,fAdvI,rX0FN,param,[SFN],P,slFN,enclR=None,res=Xout,B=ns,delta=.1,Xin=Xin,intvf=True) #cdf estimation
 cl,cu=cdfLU(hi,.001) # lower and upper  CDFs
@@ -49,6 +49,7 @@ Additional examples of usage and experiments are at the end of the script.
 
 
 import scipy
+from scipy import stats
 from sympy import *
 import numpy as np
 import matplotlib.pyplot as plt
@@ -1029,25 +1030,17 @@ sivia_time=0
 estimate_time=0
 x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11=var('x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11')
 var('th1 th2')
-FN=[0.1*(0.5521*x6-x1),
-    -0.0278*x2+0.0278*(18.2129*x8-100.25),
-    0.0142*x3-0.0078*x4 + 0.488758553275,
-     0.0152*x3-0.0078*x4,
-     -0.0039*(3.2267+0.0313*x2)*x5*(1-0.0026*x5+2.5097*10**(-6)*x5**2)+th1*x6-th2*x5,
-     3.7314-0.0047*x6-0.0121*x10-th1*x6+th2*x5+50*((1.141*10**(-4))*x11**2+(6.134*10**(-5))*x11),
-     -0.4219*x7+0.225*x8,
-      -0.315*x8+0.1545*x7+1.9*10**(-3)*x3+7.8*10**(-3)*x4,
-      -0.0046*(x9-18.2129*x8),-0.0046*(x10-x9),
-      0
-      ]
+FN=[0.1*(0.5521*x6-x1),-0.0278*x2+0.0278*(18.2129*x8-100.25),0.0142*x3-0.0078*x4 + 0.488758553275, 0.0152*x3-0.0078*x4,
+     -0.0039*(3.2267+0.0313*x2)*x5*(1-0.0026*x5+2.5097*10**(-6)*x5**2)+th1*x6-th2*x5,3.7314-0.0047*x6-0.0121*x10-th1*x6+th2*x5+50*((1.141*10**(-4))*x11**2+(6.134*10**(-5))*x11),
+     -0.4219*x7+0.225*x8,-0.315*x8+0.1545*x7+1.9*10**(-3)*x3+7.8*10**(-3)*x4,-0.0046*(x9-18.2129*x8),-0.0046*(x10-x9),1]
 fFN=lambdify([x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, th1, th2], FN)
 param=0
-tau=.3
+tau=.01
 gamma=0.05
 dev= 0.5
 a_trunc=-1.5
 b_trunc=1.5 
-time_horizon=.1
+time_horizon=.5
 X0FN=[ [[0.04,0.08],[0.05,0.12] ]]
 SFN=[[a-gamma-b_trunc,a+gamma+b_trunc] for a in adv([0.0581,0.0871],[140, 72.43, 141.15, 162.45, 268, 3.2, 5.5, 100.25, 100.25, 0, 0],0,time_horizon,[time_horizon],tau,fFN)]
 fAdv=lambda th1,th2: adv([th1,th2],[140,72.43,141.14,162.45,268,3.2,5.5,100.25,100.25,0,0],0,time_horizon,[time_horizon],tau,fn=fFN)
@@ -1069,150 +1062,3 @@ plotCDF(cl,cu,Pn)
 plt.show()
 '''
 
-################################################################################################################################
-################## Estimate Feature Relevance in  MNIST images (Stavros P. Adam, Aristidis C. Likas, 2022)  ####################
-###############################################################################################################################
-'''
-
-####### to handle trained NN ##############
-    
-def ReLU(x):
-    return max(x,0)
-
-def eLU(x):
-    if x>=0:
-        return x
-    return 0.2*(np.exp(x)-1)
-
-def applyFFN(x,WBAL,selectout=None,pre=None,post=None):
-    if type(pre)!=type(None):
-        x=pre(x)
-    k=len(WBAL)
-    j=0
-    cv=x
-    for W,b,act in WBAL:
-        j+=1
-        if type(selectout)!=type(None) and (j==k):
-            y=(W[selectout]@cv+b[selectout])
-        else:
-            y=(W@cv+b)
-        cv=np.array([act(yi) for yi in y],dtype=np.float64)
-    if type(post)!=type(None):
-        cv=post(cv)
-    return cv
-
-def applyFFNIntv(I,WBAL,selectout=None,pre=None,post=None):  # interval version of the above
-    if type(pre)!=type(None):
-        I=[ [pre(J[0]),pre(J[1])] for pre,J in zip(pre,I)]
-    k=len(WBAL)
-    j=0
-    cv=np.array(int2iv(I))
-    for W,b,act in WBAL:
-        j+=1
-        if type(selectout)!=type(None) and (j==k):
-            y=(W[selectout]@cv+b[selectout])
-        else:
-            y=(W@cv+b)
-        cv=np.array(int2iv([[act(float(yi.a)),act(float(yi.b))] for yi in y]))            
-    if type(post)!=type(None):
-        cv=np.array(int2iv([[post(float(yi.a)),post(float(yi.b))] for post,yi in zip(post,cv)]))# outputf(cv)    
-    return cv
-
-def generateFFN(WBAL,selectout=None,pre=None,post=None):
-    return lambda *x, WBAL=WBAL, selectout=selectout, pre=pre, post=post: applyFFN(x,WBAL,selectout,pre,post)
-
-def generateFFNIntv(WBAL,selectout=None,pre=None,post=None):
-    return lambda I, WBAL=WBAL, selectout=selectout, pre=pre, post=post : applyFFNIntv(I,WBAL,selectout,pre,post)
-
-
-######### import MNIST images  ##############
-from PIL import Image
-test_images = scipy.io.loadmat(r'test_images.mat')['images']
-labels_test = scipy.io.loadmat(r'labels_test.mat')['labels']
-
-############ utilities for MNIST images ####################
-def searchMin(Nim,thresh=0,N=10,changeClass=False,display=False): # modifies a set of max N pixels of original image to obtain a change in classification
-    global test_images, labels_test
-    label=labels_test[Nim][0]
-    im0=test_images[:,Nim].copy()
-    minv=np.inf
-    pos=None
-    val=None
-    modList=[]
-    nmod=0
-    while(minv>thresh) and (nmod<N):
-        for i in range(len(im0)):
-            p=im0[i]
-            if p<=.5:
-                v=1
-            else:
-                v=0
-            im0[i]=v
-            res=applyFFN(im0,NNdescr)
-            argmax=np.argmax(res)
-            if changeClass & (argmax!=label):
-                modList.append([pos,v,res[label]])
-                modList.append(['*','*',res[argmax],argmax])
-                return modList,im0
-            im0[i]=p
-            if res[label]<minv:
-                minv=res[label]
-                pos=i
-                val=v
-        modList.append([pos,val,minv])
-        im0[pos]=val     
-        nmod+=1    
-    if display:
-        show(test_images[:,Nim])
-        show(im0)
-    return modList,im0
-
-
-def show(im):
-    z0= (im * 255).astype(np.uint8).reshape(28,28)
-    img = Image.fromarray(z0)
-    img.show()
-    
-######### import   NN classifier ##############
-W2im = scipy.io.loadmat(r'wtwo.mat')['w12']    # weights matrices
-W3im = scipy.io.loadmat(r'wthree.mat')['w23']
-W4im = scipy.io.loadmat(r'wfour.mat')['w34']
-b2im = scipy.io.loadmat(r'btwo.mat')['b12'][:,0]   # bias vectors
-b3im = scipy.io.loadmat(r'bthree.mat')['b23'][:,0]
-b4im = scipy.io.loadmat(r'bfour.mat')['b34'][:,0]
-NNdescr=[[W2im,b2im,ReLU],[W3im,b3im,ReLU],[W4im,b4im,ReLU]]
-
-class_out=[max(applyFFN(test_images[:,j],NNdescr)) for j in range(len(test_images))] # classifier output (max value) for all MNIST images
-reshigh=[(i,v) for i,v in zip(range(len(class_out)),class_out) if v>=0.8]   # images for which classifier returns >=0.8
-Nim=1  # change 1 to wanted image's number, taken from reshigh
-im0=np.array(test_images[:,Nim].copy(),dtype=object)    # copy of selected image
-a,_=searchMin(Nim,N=1)   # search most 'relevant' pixel (feature) in selected image. NB: actually *any* npixel in the range 0..783 can be investigated
-npixel=a[0][0]           # npixel represents the "feature" whose relevance we want to quantify 
-vpixel=im0[npixel]
-label=labels_test[Nim][0]
-
-def fMNIST(x):
-    global im0,npixel,label
-    im0[npixel]=x
-    res=applyFFN(im0,NNdescr)[label]
-    return  [res]
-
-def fMNISTI(I):      # interval version of the above: I must be an 1-dimensional rectangle I= [ [a,b] ]
-    global im0,pixel,label
-    im0[npixel]=I[0]
-    res=np.array([applyFFNIntv(im0,NNdescr)[label]])
-    return res
-   
-X0MNIST=[ [[0,1]] ]   
-SMNIST=[[.8,1.5]]
-slDescrMNIST=[('uniform',(0,1))]
-slMNIST=buildSampler(slDescrMNIST)    
-res = boxBackReach(fMNISTI,X0MNIST,[SMNIST],delta=.1,intvf=True)
-slDescrFN=[('uniform',(0,.5)),('uniform',(0,.3)), ('trunc_gauss',(0,.01,-.1,.1)), ('trunc_gauss',(0,.01,-.1,.1))]
-slFN=buildSampler(slDescrFN)
-vol=sum([measure(R,slFN) for R in res])
-Ns=ceiling(Nsample(vol,.01,.001))
-mu,_,_,_,_=estimateCDF(fMNIST,fMNISTI,X0MNIST,0,[SMNIST],[],slMNIST,res=res,B=Ns)
-# Here 1-mu represents an estimate (+/-0.01, with a confidence of 0.001) of the feature's relevance
-# this can be repeated for all the pixels of the image
-'''
