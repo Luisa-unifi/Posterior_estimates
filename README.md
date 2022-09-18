@@ -1,2 +1,2 @@
 # Posterior_estimates
-Python code accompanying the paper: "Bayesian parameter estimation with guarantees via interval analysis and simulation"
+Python code accompanying the paper: "Bayesian parameter estimation with guarantees via interval analysis and simulation", M. Boreale, L. Collodi.
